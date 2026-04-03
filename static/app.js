@@ -171,6 +171,22 @@ async function changeSpeed() {
     }
 }
 
+async function resetSim() {
+    try {
+        await fetch('/api/control/reset?initial_price=100.0', { method: 'POST' });
+        // Clear client-side state
+        rawPrices = [];
+        candles = [];
+        volumeAccum = 0;
+        lastPrice = null;
+        updatePriceDisplay(100.0);
+        updateStats(0, 0);
+        drawCandleChart();
+    } catch (e) {
+        console.error('Failed to reset:', e);
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Candlestick Chart (Canvas)
 // ---------------------------------------------------------------------------

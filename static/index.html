@@ -59,6 +59,8 @@
         .btn-start:hover:not(:disabled) { background: #16a34a; }
         .btn-stop { background: #ef4444; color: white; }
         .btn-stop:hover:not(:disabled) { background: #dc2626; }
+        .btn-reset { background: #6b7280; color: white; }
+        .btn-reset:hover:not(:disabled) { background: #4b5563; }
         .btn-buy { background: #3b82f6; color: white; }
         .btn-buy:hover:not(:disabled) { background: #2563eb; }
         .btn-sell { background: #f97316; color: white; }
@@ -148,6 +150,7 @@
         <div class="controls">
             <button id="btnStart" class="btn-start" onclick="controlSim('start')">Start</button>
             <button id="btnStop" class="btn-stop" onclick="controlSim('stop')">Pause</button>
+            <button id="btnReset" class="btn-reset" onclick="resetSim()">Reset</button>
             <button id="btnBuy" class="btn-buy" onclick="manualTrade('buy')">Buy 10</button>
             <button id="btnSell" class="btn-sell" onclick="manualTrade('sell')">Sell 10</button>
             <div class="speed-control">

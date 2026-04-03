@@ -169,3 +169,11 @@ class SimulationEngine:
     def set_tick_interval_ms(self, ms: int):
         """Dynamically change simulation speed."""
         self._tick_interval = max(1, ms) / 1000.0
+
+    def reset(self, initial_price: float = 100.0):
+        """Reset the entire simulation state: order book, history, ticks."""
+        self.order_book = OrderBook(last_price=initial_price)
+        self.price_history = []
+        self.volume_history = []
+        self.ticks = []
+        self._step = 0

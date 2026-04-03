@@ -207,6 +207,15 @@ async def set_speed(prices_per_second: int = 10):
     return {"status": "updated", "prices_per_second": prices_per_second, "interval_ms": interval_ms}
 
 
+@app.post("/api/control/reset")
+async def reset_sim(initial_price: float = 100.0):
+    """Reset simulation: clear order book, price history, candles."""
+    if sim is None:
+        return JSONResponse({"error": "Simulation not initialized"}, status_code=503)
+    sim.reset(initial_price=initial_price)
+    return {"status": "reset", "initial_price": initial_price}
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("main:app", host="0.0.0.0", port=8888, reload=False)
