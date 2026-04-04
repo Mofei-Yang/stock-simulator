@@ -135,6 +135,33 @@
             color: #4a5568;
             margin-bottom: 10px;
         }
+        /* Toast notification */
+        .toast-container {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 1000;
+        }
+        .toast {
+            background: #1a202c;
+            border: 1px solid #3b82f6;
+            color: #f7fafc;
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+            animation: toastIn 0.3s ease, toastOut 0.3s ease 2s forwards;
+            pointer-events: none;
+        }
+        @keyframes toastIn {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes toastOut {
+            from { opacity: 1; }
+            to { opacity: 0; transform: translateY(-10px); }
+        }
     </style>
 </head>
 <body>
@@ -148,8 +175,8 @@
         </header>
 
         <div class="controls">
-            <button id="btnStart" class="btn-start" onclick="controlSim('start')">Start</button>
-            <button id="btnStop" class="btn-stop" onclick="controlSim('stop')">Pause</button>
+            <button id="btnStart" class="btn-start" onclick="controlSim('start'); showToast('Simulation started')">Start</button>
+            <button id="btnStop" class="btn-stop" onclick="controlSim('stop'); showToast('Simulation paused')">Pause</button>
             <button id="btnReset" class="btn-reset" onclick="resetSim()">Reset</button>
             <button id="btnBuy" class="btn-buy" onclick="manualTrade('buy')">Buy 10</button>
             <button id="btnSell" class="btn-sell" onclick="manualTrade('sell')">Sell 10</button>
@@ -158,6 +185,10 @@
                 <input type="number" id="speedInput" class="speed-input" min="1" max="1000" value="10">
                 <span class="speed-unit">prices/s</span>
                 <button onclick="changeSpeed()" style="background:#4a5568;color:#f7fafc;padding:8px 12px;">Set</button>
+                <span style="color:#2d3748;margin:0 8px;">|</span>
+                <span class="speed-label">Traders:</span>
+                <input type="number" id="traderInput" class="speed-input" min="1" max="5000" value="1000">
+                <button onclick="changeTraders()" style="background:#4a5568;color:#f7fafc;padding:8px 12px;">Set</button>
             </div>
         </div>
 
@@ -186,11 +217,16 @@
                 <div id="statPoints" class="stat-value">0</div>
             </div>
             <div class="stat-card">
+                <div class="stat-label">Traders</div>
+                <div id="statTraders" class="stat-value">1000</div>
+            </div>
+            <div class="stat-card">
                 <div class="stat-label">Raw Ticks (current)</div>
                 <div id="statRawTicks" class="stat-value">0</div>
             </div>
         </div>
     </div>
+    <div class="toast-container" id="toastContainer"></div>
 
     <script src="/static/app.js"></script>
 </body>

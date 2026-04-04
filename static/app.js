@@ -22,6 +22,18 @@ let lastPrice = null;
 let targetPricesPerSec = 10;     // default speed
 
 // ---------------------------------------------------------------------------
+// Toast Notifications
+// ---------------------------------------------------------------------------
+function showToast(message) {
+    const container = document.getElementById('toastContainer');
+    const toast = document.createElement('div');
+    toast.className = 'toast';
+    toast.textContent = message;
+    container.appendChild(toast);
+    setTimeout(() => toast.remove(), 2500);
+}
+
+// ---------------------------------------------------------------------------
 // WebSocket Connection
 // ---------------------------------------------------------------------------
 function connect() {
@@ -166,15 +178,29 @@ async function changeSpeed() {
     targetPricesPerSec = val;
     try {
         await fetch(`/api/control/speed?prices_per_second=${val}`, { method: 'POST' });
+        showToast(`Velocity set to ${val} prices/s`);
     } catch (e) {
         console.error('Failed to change speed:', e);
+    }
+}
+
+async function changeTraders() {
+    const input = document.getElementById('traderInput');
+    const val = parseInt(input.value);
+    if (isNaN(val) || val < 1) return;
+    try {
+        const resp = await fetch(`/api/control/traders?count=${val}`, { method: 'POST' });
+        const data = await resp.json();
+        showToast(`${data.trader_count} traders set`);
+        document.getElementById('statTraders').textContent = data.trader_count;
+    } catch (e) {
+        console.error('Failed to change traders:', e);
     }
 }
 
 async function resetSim() {
     try {
         await fetch('/api/control/reset?initial_price=100.0', { method: 'POST' });
-        // Clear client-side state
         rawPrices = [];
         candles = [];
         volumeAccum = 0;
@@ -182,6 +208,7 @@ async function resetSim() {
         updatePriceDisplay(100.0);
         updateStats(0, 0);
         drawCandleChart();
+        showToast('Simulation reset');
     } catch (e) {
         console.error('Failed to reset:', e);
     }

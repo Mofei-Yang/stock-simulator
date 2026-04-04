@@ -207,6 +207,19 @@ async def set_speed(prices_per_second: int = 10):
     return {"status": "updated", "prices_per_second": prices_per_second, "interval_ms": interval_ms}
 
 
+@app.post("/api/control/traders")
+async def set_traders(count: int = 1000):
+    """Rebuild trader pool with given count. Replaces existing traders."""
+    global sim
+    if sim is None:
+        return JSONResponse({"error": "Simulation not initialized"}, status_code=503)
+    count = max(1, count)
+    # Build new trader pool: keep existing pattern but change count
+    new_traders = [RandomTrader(trader_id=i) for i in range(count)]
+    sim.traders = new_traders
+    return {"status": "updated", "trader_count": count}
+
+
 @app.post("/api/control/reset")
 async def reset_sim(initial_price: float = 100.0):
     """Reset simulation: clear order book, price history, candles."""
