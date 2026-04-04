@@ -16,7 +16,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from engine import RandomTrader, SimulationEngine
@@ -155,6 +155,55 @@ async def get_orderbook():
     if sim is None:
         return JSONResponse({"error": "Simulation not initialized"}, status_code=503)
     return sim.get_order_book_snapshot()
+
+
+@app.get("/api/ticks")
+async def get_ticks(limit: int = 0):
+    """Raw tick-by-tick data: step, price, volume for every tick.
+    
+    limit=0 returns all ticks (for bulk export).
+    """
+    if sim is None:
+        return JSONResponse({"error": "Simulation not initialized"}, status_code=503)
+    ticks = sim.ticks
+    if limit > 0:
+        ticks = ticks[-limit:]
+    return {
+        "ticks": [{"step": t.step, "price": t.price, "volume": t.volume} for t in ticks],
+        "total": len(ticks),
+    }
+
+
+@app.get("/api/export/csv")
+async def export_csv():
+    """Download all raw tick data as CSV.
+    
+    Columns: step, price, volume
+    Suitable for piping to files or loading in pandas/numpy.
+    """
+    if sim is None:
+        return JSONResponse({"error": "Simulation not initialized"}, status_code=503)
+    lines = ["step,price,volume"]
+    for t in sim.ticks:
+        lines.append(f"{t.step},{t.price},{t.volume}")
+    body = "\n".join(lines) + "\n"
+    return Response(content=body, media_type="text/csv", headers={
+        "Content-Disposition": "attachment; filename=ticks.csv",
+    })
+
+
+@app.get("/api/status")
+async def get_status():
+    """Full simulation status for scripting."""
+    if sim is None:
+        return JSONResponse({"error": "Simulation not initialized"}, status_code=503)
+    return {
+        "running": sim.is_running,
+        "current_price": sim.current_price,
+        "tick_count": len(sim.ticks),
+        "trader_count": len(sim.traders),
+        "tick_interval_ms": round(sim._tick_interval * 1000, 1),
+    }
 
 
 @app.post("/api/control/start")
