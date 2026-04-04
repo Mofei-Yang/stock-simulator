@@ -111,17 +111,34 @@ def cmd_generate(args):
 
     if args.export:
         # POST to CSV endpoint — instant generation + download
+        print(f"  Generating {count:,} ticks... ", end="", flush=True)
+        import time
+        t0 = time.time()
         url = f"{BASE_URL}/api/generate/csv?count={count}&initial_price={price}"
         req = urllib.request.Request(url, method="POST", data=b"")
         with urllib.request.urlopen(req, timeout=600) as resp:
             csv_data = resp.read().decode()
+        elapsed = time.time() - t0
+
+        # Write to file
+        lines = csv_data.count("\n")
+        ticks_generated = lines - 1  # minus header
+        rate = ticks_generated / max(elapsed, 0.001)
+
         with open(args.export, "w") as f:
             f.write(csv_data)
-        lines = csv_data.strip().count("\n")
-        print(f"Generated {lines - 1} ticks -> {args.export}")
+        print(f"done — {ticks_generated:,} ticks → {args.export}")
+        print(f"  Time: {elapsed:.1f}s  ({rate:,.0f} ticks/sec)")
     else:
+        import time
+        print(f"  Generating {count:,} ticks... ", end="", flush=True)
+        t0 = time.time()
         data = _post("/api/generate", {"count": count, "initial_price": price})
-        print(f"Generated {data['count']} ticks  final_price={data['final_price']:.4f}")
+        elapsed = time.time() - t0
+        rate = data['count'] / max(elapsed, 0.001)
+        print(f"done")
+        print(f"  Generated {data['count']:,} ticks  final_price={data['final_price']:.4f}")
+        print(f"  Time: {elapsed:.1f}s  ({rate:,.0f} ticks/sec)")
 
 
 def cmd_start(_):

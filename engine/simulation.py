@@ -198,6 +198,4 @@ class SimulationEngine:
                 self.volume_history.append(tick.volume)
             self.order_book.last_price = tick.price
             results.append({"step": tick.step, "price": tick.price, "volume": tick.volume})
-        if results and self._subscribers:
-            self._broadcast()
         return results
