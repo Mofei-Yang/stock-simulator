@@ -8,22 +8,25 @@ data collection, and AI training pipelines.
 Usage:
     python cli/sim.py status
     python cli/sim.py price
-    python cli/sim.py ticks --limit 100
-    python cli/sim.py ticks --export ticks.csv
-    python cli/sim.py buy --quantity 50
-    python cli/sim.py sell --quantity 50
+    python cli/sim.py ticks                  # live accumulated ticks
+    python cli/sim.py ticks -l 100           # last 100 live ticks
+    python cli/sim.py generate -c 10000      # instant 10k ticks (no sleep)
+    python cli/sim.py generate -c 10000 -e ticks.csv  # instant export
+    python cli/sim.py buy -q 50
+    python cli/sim.py sell -q 50
     python cli/sim.py start
     python cli/sim.py stop
     python cli/sim.py reset
-    python cli/sim.py speed --prices-per-second 60
-    python cli/sim.py traders --count 2000
+    python cli/sim.py speed -p 60
+    python cli/sim.py traders -c 2000
 
 Examples:
-    # Collect 10000 ticks then export
-    python cli/sim.py reset
-    python cli/sim.py start
-    sleep 60  # wait for ticks to accumulate
-    python cli/sim.py ticks --export dataset.csv
+    # Instant 100k tick dataset — no waiting, no GUI
+    python cli/sim.py generate -c 100000 -e dataset.csv
+
+    # Multiple datasets with different trader counts
+    python cli/sim.py traders -c 500 && python cli/sim.py generate -c 50000 -e traders_500.csv
+    python cli/sim.py traders -c 2000 && python cli/sim.py generate -c 50000 -e traders_2000.csv
 
     # Watch price live
     watch -n 1 "python cli/sim.py price"
@@ -32,6 +35,7 @@ Examples:
 import argparse
 import json
 import sys
+import time
 import urllib.request
 import urllib.parse
 
@@ -39,7 +43,6 @@ BASE_URL = "http://localhost:8888"
 
 
 def _get(path: str, params: dict | None = None) -> dict:
-    """Make a GET request and return parsed JSON."""
     if params:
         qs = urllib.parse.urlencode(params)
         url = f"{BASE_URL}{path}?{qs}"
@@ -56,7 +59,6 @@ def _get(path: str, params: dict | None = None) -> dict:
 
 
 def _post(path: str, params: dict | None = None) -> dict:
-    """Make a POST request and return parsed JSON."""
     if params:
         qs = urllib.parse.urlencode(params)
         url = f"{BASE_URL}{path}?{qs}"
@@ -70,6 +72,12 @@ def _post(path: str, params: dict | None = None) -> dict:
         print(f"Error: Cannot connect to simulator at {BASE_URL}. Is it running?", file=sys.stderr)
         print(f"  {e.reason}", file=sys.stderr)
         sys.exit(1)
+
+
+def _download(url: str) -> str:
+    req = urllib.request.Request(url)
+    with urllib.request.urlopen(req, timeout=600) as resp:
+        return resp.read().decode()
 
 
 def cmd_status(_):
@@ -87,21 +95,33 @@ def cmd_price(_):
 
 
 def cmd_ticks(args):
-    if args.export:
-        url = f"{BASE_URL}/api/export/csv"
-        req = urllib.request.Request(url)
-        with urllib.request.urlopen(req, timeout=30) as resp:
-            body = resp.read().decode()
-        with open(args.export, "w") as f:
-            f.write(body)
-        count = body.strip().count("\n")
-        print(f"Exported {count - 1} ticks to {args.export}")
+    if args.limit:
+        data = _get("/api/ticks", {"limit": args.limit})
     else:
-        limit = args.limit or 0
-        data = _get("/api/ticks", {"limit": limit})
-        print(f"Total ticks: {data['total']}")
-        for t in data["ticks"]:
-            print(f"  step={t['step']}  price={t['price']:.4f}  volume={t['volume']:.2f}")
+        data = _get("/api/ticks", {"limit": 0})
+    print(f"Total ticks: {data['total']}")
+    for t in data["ticks"]:
+        print(f"  step={t['step']}  price={t['price']:.4f}  volume={t['volume']:.2f}")
+
+
+def cmd_generate(args):
+    """Generate N ticks instantly (no sleep needed)."""
+    count = args.count
+    price = args.price
+
+    if args.export:
+        # POST to CSV endpoint — instant generation + download
+        url = f"{BASE_URL}/api/generate/csv?count={count}&initial_price={price}"
+        req = urllib.request.Request(url, method="POST", data=b"")
+        with urllib.request.urlopen(req, timeout=600) as resp:
+            csv_data = resp.read().decode()
+        with open(args.export, "w") as f:
+            f.write(csv_data)
+        lines = csv_data.strip().count("\n")
+        print(f"Generated {lines - 1} ticks -> {args.export}")
+    else:
+        data = _post("/api/generate", {"count": count, "initial_price": price})
+        print(f"Generated {data['count']} ticks  final_price={data['final_price']:.4f}")
 
 
 def cmd_start(_):
@@ -142,35 +162,32 @@ def cmd_traders(args):
 # ---------------------------------------------------------------------------
 # CLI parser
 # ---------------------------------------------------------------------------
-parser = argparse.ArgumentParser(
-    description="Market Simulator CLI",
-)
+parser = argparse.ArgumentParser(description="Market Simulator CLI")
 sub = parser.add_subparsers(dest="command")
 
-# status
 sub.add_parser("status", help="Show simulation status")
-
-# price
 sub.add_parser("price", help="Show current price")
 
-# ticks
-p_ticks = sub.add_parser("ticks", help="Get raw tick data")
+# ticks — view live accumulated data
+p_ticks = sub.add_parser("ticks", help="View live accumulated ticks")
 p_ticks.add_argument("-l", "--limit", type=int, default=0, help="Limit ticks (0=all)")
-p_ticks.add_argument("-e", "--export", type=str, default="", help="Export CSV to file")
 
-# start / stop / reset
+# generate — instant bulk data, no waiting
+p_gen = sub.add_parser("generate", help="Generate N ticks instantly (no sleep)")
+p_gen.add_argument("-c", "--count", type=int, default=10000, help="Number of ticks to generate")
+p_gen.add_argument("-e", "--export", type=str, default="", help="Export CSV to file")
+p_gen.add_argument("-p", "--price", type=float, default=100.0, help="Initial price")
+
 sub.add_parser("start", help="Start simulation")
 sub.add_parser("stop", help="Pause simulation")
 p_reset = sub.add_parser("reset", help="Reset simulation")
 p_reset.add_argument("-p", "--price", type=float, default=100.0, help="Initial price")
 
-# buy / sell
 p_buy = sub.add_parser("buy", help="Place buy order")
 p_buy.add_argument("-q", "--quantity", type=float, default=10.0)
 p_sell = sub.add_parser("sell", help="Place sell order")
 p_sell.add_argument("-q", "--quantity", type=float, default=10.0)
 
-# speed / traders
 p_speed = sub.add_parser("speed", help="Set tick rate")
 p_speed.add_argument("-p", "--prices-per-second", type=int, default=10)
 p_traders = sub.add_parser("traders", help="Set trader count")
@@ -187,6 +204,7 @@ def main():
         "status": cmd_status,
         "price": cmd_price,
         "ticks": cmd_ticks,
+        "generate": cmd_generate,
         "start": cmd_start,
         "stop": cmd_stop,
         "reset": cmd_reset,

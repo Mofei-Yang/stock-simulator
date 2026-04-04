@@ -206,6 +206,41 @@ async def get_status():
     }
 
 
+@app.post("/api/generate")
+async def generate_ticks(count: int = 1000, initial_price: float = 100.0):
+    """Synchronously generate N ticks and return them as JSON.
+
+    Bypasses the async timer — instant data for scripts/AI training.
+    Optionally reset first via initial_price parameter.
+    """
+    if sim is None:
+        return JSONResponse({"error": "Simulation not initialized"}, status_code=503)
+    if initial_price != 100.0 or count > len(sim.ticks) + 100:
+        # Reset only if explicitly requested or if this is a fresh bulk run
+        sim.reset(initial_price=initial_price)
+    data = sim.generate_ticks(count)
+    return {"ticks": data, "count": len(data), "final_price": sim.current_price}
+
+
+@app.post("/api/generate/csv")
+async def generate_csv(count: int = 10000, initial_price: float = 100.0):
+    """Generate N ticks and return as CSV instantly. No sleep needed.
+
+    Always resets to initial_price first to give a clean dataset.
+    """
+    if sim is None:
+        return JSONResponse({"error": "Simulation not initialized"}, status_code=503)
+    sim.reset(initial_price=initial_price)
+    ticks = sim.generate_ticks(count)
+    lines = ["step,price,volume"]
+    for t in ticks:
+        lines.append(f"{t['step']},{t['price']},{t['volume']}")
+    body = "\n".join(lines) + "\n"
+    return Response(content=body, media_type="text/csv", headers={
+        "Content-Disposition": "attachment; filename=ticks.csv",
+    })
+
+
 @app.post("/api/control/start")
 async def start_sim():
     if sim is None:

@@ -177,3 +177,27 @@ class SimulationEngine:
         self.volume_history = []
         self.ticks = []
         self._step = 0
+
+    def generate_ticks(self, count: int) -> list[dict]:
+        """Synchronously generate N ticks without waiting.
+
+        Useful for data generation / AI training pipelines where
+        we need bulk data instantly instead of waiting for the
+        async timer loop.
+
+        Returns list of dicts with step, price, volume.
+        """
+        count = max(0, int(count))
+        results = []
+        for _ in range(count):
+            tick = self._step_once()
+            self._step += 1
+            self.ticks.append(tick)
+            self.price_history.append(tick.price)
+            if tick.volume > 0:
+                self.volume_history.append(tick.volume)
+            self.order_book.last_price = tick.price
+            results.append({"step": tick.step, "price": tick.price, "volume": tick.volume})
+        if results and self._subscribers:
+            self._broadcast()
+        return results
