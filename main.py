@@ -10,16 +10,27 @@ Endpoints:
 - POST /api/control/stop  → Stop simulation
 """
 
+import asyncio
 import json
 import logging
+import threading
 from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-from fastapi.responses import FileResponse, JSONResponse, Response
+from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 from engine import RandomTrader, SimulationEngine
+
+# Global progress tracker for data generation
+_generation_progress = {
+    "active": False,
+    "target": 0,
+    "current": 0,
+    "last_reported": 0,
+}
+_generation_lock = threading.Lock()
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -206,35 +217,35 @@ async def get_status():
     }
 
 
-@app.post("/api/generate")
-async def generate_ticks(count: int = 1000, initial_price: float = 100.0):
-    """Synchronously generate N ticks and return them as JSON.
-
-    Bypasses the async timer — instant data for scripts/AI training.
-    Optionally reset first via initial_price parameter.
-    """
-    if sim is None:
-        return JSONResponse({"error": "Simulation not initialized"}, status_code=503)
-    if initial_price != 100.0 or count > len(sim.ticks) + 100:
-        # Reset only if explicitly requested or if this is a fresh bulk run
-        sim.reset(initial_price=initial_price)
-    data = sim.generate_ticks(count)
-    return {"ticks": data, "count": len(data), "final_price": sim.current_price}
+@app.get("/api/generate/progress")
+async def get_generate_progress():
+    """Poll this endpoint during long generations to see tick count."""
+    with _generation_lock:
+        return {
+            "active": bool(_generation_progress["active"]),
+            "target": int(_generation_progress["target"]),
+            "current": int(_generation_progress["current"]),
+            "last_reported": int(_generation_progress["last_reported"]),
+        }
 
 
 @app.post("/api/generate/csv")
 async def generate_csv(count: int = 10000, initial_price: float = 100.0):
-    """Generate N ticks and return as CSV instantly. No sleep needed.
-
-    Always resets to initial_price first to give a clean dataset.
+    """Generate N ticks and return as CSV.
+    
+    Runs synchronously — no threading, no race conditions.
     """
     if sim is None:
         return JSONResponse({"error": "Simulation not initialized"}, status_code=503)
+
     sim.reset(initial_price=initial_price)
+
+    # Disable progress callback during generation (no threading = no progress polling)
     ticks = sim.generate_ticks(count)
+
     lines = ["step,price,volume"]
-    for t in ticks:
-        lines.append(f"{t['step']},{t['price']},{t['volume']}")
+    for tick in ticks:
+        lines.append(f"{tick['step']},{tick['price']},{tick['volume']}")
     body = "\n".join(lines) + "\n"
     return Response(content=body, media_type="text/csv", headers={
         "Content-Disposition": "attachment; filename=ticks.csv",
@@ -315,4 +326,4 @@ async def reset_sim(initial_price: float = 100.0):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("main:app", host="0.0.0.0", port=8888, reload=False)
+    uvicorn.run("main:app", host="0.0.0.0", port=8888, reload=False, workers=1, access_log=False)
